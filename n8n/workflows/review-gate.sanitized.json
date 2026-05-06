@@ -1,0 +1,33 @@
+{
+  "name": "Review Gate - Sanitized",
+  "nodes": [
+    {
+      "name": "[Review] Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "parameters": {
+        "path": "REPLACE_WITH_LOCAL_PATH",
+        "httpMethod": "POST"
+      }
+    },
+    {
+      "name": "[Review] Validate Payload",
+      "type": "n8n-nodes-base.code",
+      "parameters": {
+        "jsCode": "return items.map(item => ({ json: { ...item.json, validated: true } }));"
+      }
+    },
+    {
+      "name": "[CRM] Build Write Plan",
+      "type": "n8n-nodes-base.code",
+      "parameters": {
+        "jsCode": "return items.map(item => ({ json: { crm_object: 'company', action: 'upsert', payload: item.json } }));"
+      }
+    }
+  ],
+  "connections": {},
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
+

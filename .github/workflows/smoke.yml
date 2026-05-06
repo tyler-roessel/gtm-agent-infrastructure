@@ -1,0 +1,17 @@
+name: Smoke
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  sandbox:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python agent/orchestrator.py --sandbox --records 10
+      - run: python agent/orchestrator.py --sandbox --records 10 --simulate-20pct-failure --export examples/smoke-output.csv
+

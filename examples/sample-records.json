@@ -1,0 +1,19 @@
+[
+  {
+    "company_name": "Synthwave AI",
+    "domain": "synthwaveai.test",
+    "source": "directory",
+    "icp_segment": "Growth-First Founder",
+    "icp_score": 0.82,
+    "review_status": "pending"
+  },
+  {
+    "company_name": "DataPond",
+    "domain": "datapond.test",
+    "source": "referral",
+    "icp_segment": "Revenue Operations Lead",
+    "icp_score": 0.91,
+    "review_status": "pending"
+  }
+]
+
