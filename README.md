@@ -10,6 +10,8 @@ It is not a product and it is not a turnkey integration. It is a reference syste
 - How AI outputs were moved from terminal experiments to sandbox runs, human review, and automation-ready execution.
 - How Airtable, Attio, n8n, MCP tools, and agent code can be separated by ownership boundary.
 - How field authority, deduplication, review gates, retries, and CRM write paths are documented before they are automated.
+- How company voice, ICP rules, source criteria, and writing boundaries can be turned into explicit system inputs instead of informal tribal knowledge.
+- How sales-cycle events such as calls, signed MSAs, new requirements, approvals, objections, and handoff notes can trigger different downstream actions.
 - How the same pattern generalizes to Salesforce, HubSpot, Attio, or another CRM.
 
 ## The Five-Stage Workflow
@@ -57,6 +59,42 @@ The important boundary is field authority:
 - n8n owns triggers, retries, transforms, polling fallbacks, and webhooks.
 - MCP exposes the agent/tool layer so workflows can call enrichment, scoring, mapping, and drafting tools through a standard interface.
 
+## Operating Architecture
+
+The repo is meant to show the infrastructure pattern behind a GTM system, not only a single enrichment script. A useful version has to preserve more than account fields:
+
+```text
+Company memory
+  -> brand voice, positioning, offers, proof points, claims to avoid
+
+ICP and source criteria
+  -> fit rules, exclusion rules, source trust, scoring, confidence thresholds
+
+Signal capture
+  -> calls, emails, notes, web changes, job posts, funding, signed contracts
+
+Agent review packet
+  -> summary, evidence, recommended action, owner, routing reason, write payload
+
+Human approval gate
+  -> approve, reject, revise, hold, route to another team, update criteria
+
+System handoff
+  -> CRM, Slack, Airtable, n8n, Gong, data warehouse, marketing, sales, customer success
+```
+
+That means the system has to answer several practical questions before anything writes to a CRM:
+
+- What language fits the company's brand, category, voice, and ethos?
+- Which claims, terms, or outreach angles should not be written?
+- Which ICP criteria matter for this motion, and what evidence supports the fit score?
+- Which sources are trusted enough to route automatically, and which require review?
+- What changed in the sales cycle: discovery call, objection, stakeholder add, MSA signed, renewal risk, implementation blocker, or new buying signal?
+- Which team owns the next step, and which platform needs the update?
+- What should become a CRM field, an activity note, a task, a Slack handoff, or a research queue item?
+
+The sandbox uses synthetic records, but the implementation pattern is the same: collect evidence, score fit, generate a bounded recommendation, require review where confidence is low, then route approved outputs to the correct downstream system.
+
 ## What Was Preserved
 
 - Real architecture shape and folder structure.
@@ -73,22 +111,6 @@ The important boundary is field authority:
 - No raw private prompts or session transcripts.
 - No private business language.
 - Sample data uses synthetic names and `.test` domains.
-
-## How A CTO Or Engineer Should Review This Sample
-
-Review it as an architecture and implementation evidence sample, not as a packaged SaaS app.
-
-Start with these questions:
-
-- Does the repo show where each system owns state?
-- Does the code demonstrate a real pipeline shape rather than vague AI claims?
-- Does the review gate prevent blind CRM writes?
-- Are failure modes explicit?
-- Can the workflow be mapped from terminal run to enrichment, Airtable review, n8n routing, and CRM handoff?
-- Is the abstraction portable to Attio, Salesforce, HubSpot, or another CRM?
-- Is private data excluded while the implementation pattern remains concrete?
-
-The answer should be yes. The runnable sandbox exists so reviewers can inspect the pipeline mechanics without needing credentials.
 
 ## Repo Map
 
@@ -118,4 +140,3 @@ python3 orchestrator.py --sandbox --records 50 --simulate-20pct-failure
 ```
 
 No credentials are required. Sandbox mode calls no external APIs.
-
