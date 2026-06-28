@@ -1,6 +1,6 @@
 # GTM Infrastructure Public Showcase
 
-This repo is a sanitized public mirror of a private GTM automation architecture. It preserves the real system shape, stage progression, orchestration patterns, review gates, MCP transition, CRM mapping logic, and implementation lessons while replacing private business data, credentials, schemas, prompts, webhooks, and customer/prospect details with safe examples.
+This repo is a public reference version of a private GTM automation architecture. It preserves the real system shape, stage progression, orchestration patterns, review gates, MCP transition, CRM mapping logic, and implementation lessons while using synthetic examples instead of private business data, credentials, schemas, prompts, webhooks, or customer/prospect details.
 
 It is not a product and it is not a turnkey integration. It is a reference system for how sales pipeline data, enrichment workflows, CRM tooling, and AI agents can fit together when the workflow is built in stages instead of wired directly into production.
 
@@ -104,7 +104,7 @@ The sandbox uses synthetic records, but the implementation pattern is the same: 
 - Real CRM mapping concerns: field authority, deduplication, retry behavior, webhook fallback, activity sync.
 - Safe runnable sandbox code using synthetic records.
 
-## What Was Sanitized
+## What Was Removed For The Public Version
 
 - No real prospects, customers, candidates, or company data.
 - No webhook URLs, API keys, tokens, workspace IDs, field IDs, object IDs, or private schemas.
