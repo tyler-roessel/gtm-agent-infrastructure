@@ -14,7 +14,7 @@ Optional checks:
 ```bash
 python3 orchestrator.py --sandbox --records 50 --simulate-rate-limit
 python3 orchestrator.py --sandbox --records 50 --simulate-20pct-failure
-python3 orchestrator.py --sandbox --records 25 --seed 0 --approve REVIEW-COMP-0001 --reviewer demo-reviewer
+python3 orchestrator.py --sandbox --records 25 --seed 0 --approve REVIEW-COMP-0001-e422c86df7597581 --reviewer demo-reviewer
 python3 orchestrator.py --sandbox --records 25 --export ../examples/sandbox-output.csv
 ```
 

@@ -12,13 +12,13 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import json
 import logging
 import random
 import re
 import sys
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 
@@ -38,6 +38,7 @@ ICP_SEGMENTS = [
 ]
 
 SOURCES = ["directory", "referral", "job_signal", "manual", "partner", "content_signal"]
+FIXTURE_TIMESTAMP = "2026-01-01T00:00:00+00:00"
 INDUSTRIES = ["B2B SaaS", "FinTech", "Marketplace", "Enterprise SaaS", "Developer Tools", "Vertical SaaS"]
 FUNDING_STAGES = ["Pre-Seed", "Seed", "Series A", "Series B", "Series C", "Bootstrapped", "Growth"]
 COMPANY_NAMES = [
@@ -112,7 +113,7 @@ def synthetic_companies(count: int, *, seed: int = 0) -> list[Company]:
     if count < 0:
         raise ValueError("record count cannot be negative")
     rng = random.Random(seed)
-    now = datetime.now(timezone.utc).isoformat()
+    now = FIXTURE_TIMESTAMP
     companies = []
     for idx in range(count):
         name = COMPANY_NAMES[idx % len(COMPANY_NAMES)]
@@ -177,7 +178,7 @@ def score_icp(company: Company) -> tuple[str, float]:
 
 
 def enrich(company: Company, simulate_rate_limit: bool = False, *, rng: random.Random | None = None) -> Company:
-    if simulate_rate_limit and (rng or random.Random(0)).random() < 0.15:
+    if simulate_rate_limit and (rng or random).random() < 0.15:
         raise RuntimeError("simulated_rate_limit")
     company.enrichment_status = "complete"
     company.pipeline_stage = "enriched"
@@ -197,8 +198,15 @@ def build_review(company: Company) -> ReviewRecord:
         "prepare CRM company payload",
         "route to review queue",
     ]
+    facts = asdict(company)
+    facts = {key: facts[key] for key in (
+        "company_id", "name", "domain", "source", "industry", "employee_count",
+        "funding_stage", "funding_amount", "tech_stack", "discovered_at",
+    )}
+    packet = {"company": facts, "summary": summary, "actions": actions}
+    digest = hashlib.sha256(json.dumps(packet, sort_keys=True).encode()).hexdigest()[:16]
     return ReviewRecord(
-        review_id=f"REVIEW-{company.company_id}",
+        review_id=f"REVIEW-{company.company_id}-{digest}",
         company_id=company.company_id,
         company_name=company.name,
         icp_segment=company.icp_segment or "Unscored",
@@ -299,6 +307,8 @@ def export_csv(path: Path, companies: list[Company], reviews: list[ReviewRecord]
                 "icp_score",
                 "pipeline_stage",
                 "review_status",
+                "review_id",
+                "approved_by",
             ],
         )
         writer.writeheader()
@@ -314,6 +324,8 @@ def export_csv(path: Path, companies: list[Company], reviews: list[ReviewRecord]
                     "icp_score": company.icp_score,
                     "pipeline_stage": company.pipeline_stage,
                     "review_status": review_record.status if review_record else "none",
+                    "review_id": review_record.review_id if review_record else "",
+                    "approved_by": review_record.approved_by if review_record else "",
                 }
             )
 
@@ -333,6 +345,8 @@ def display(companies: list[Company], reviews: list[ReviewRecord], failures: lis
     print("\n--- REVIEW QUEUE ---")
     for status in ["pending", "approved", "rejected"]:
         print(f"  {status}: {sum(1 for item in reviews if item.status == status)}")
+    for item in reviews:
+        print(f"  {item.review_id}: {item.status}; reviewer={item.approved_by or 'none'}")
 
     print("\n--- FAILURE LOG ---")
     print(f"  failures preserved: {len(failures)}")

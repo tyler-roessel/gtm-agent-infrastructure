@@ -18,8 +18,10 @@ Use Python 3.10+. Install pytest and run `python3 -m pytest -q`.
 
 ```bash
 python3 agent/orchestrator.py --sandbox --records 10 --seed 0
-python3 agent/orchestrator.py --sandbox --records 10 --seed 0 --approve REVIEW-COMP-0001 --reviewer demo-reviewer
+python3 agent/orchestrator.py --sandbox --records 10 --seed 0 --approve REVIEW-COMP-0001-e422c86df7597581 --reviewer demo-reviewer
 ```
+
+Review IDs include a digest of the actual packet. Changed facts or a different seed require a new review ID. Exports retain the ID and reviewer. Fixture timestamps are fixed synthetic values so complete records can be reproduced.
 
 Persistent state, reviewer access control, model evaluation, connector execution, durable retries, and monitoring are outside this sample. The architecture narrative supplies design context rather than proof of production deployment.
 

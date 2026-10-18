@@ -1,9 +1,10 @@
 from dataclasses import asdict, replace
+import csv
 
 import pytest
 
 from agent.orchestrator import (
-    build_review, parse_args, review, run_pipeline, score_icp, synthetic_companies,
+    build_review, enrich, export_csv, parse_args, review, run_pipeline, score_icp, synthetic_companies,
 )
 
 
@@ -20,7 +21,7 @@ def test_synthetic_fixture_seed_is_repeatable():
     first = synthetic_companies(5, seed=7)
     second = synthetic_companies(5, seed=7)
     for a, b in zip(first, second):
-        assert asdict(a) | {"discovered_at": ""} == asdict(b) | {"discovered_at": ""}
+        assert asdict(a) == asdict(b)
 
 
 def test_high_score_cannot_self_approve():
@@ -47,9 +48,11 @@ def test_pipeline_holds_all_records_without_explicit_approval():
 
 
 def test_pipeline_only_plans_the_selected_record():
-    args = parse_args(["--sandbox", "--records", "10", "--approve", "REVIEW-COMP-0001", "--reviewer", "fixture-reviewer"])
+    _, baseline, _ = run_pipeline(parse_args(["--sandbox", "--records", "10"]))
+    selected = baseline[0].review_id
+    args = parse_args(["--sandbox", "--records", "10", "--approve", selected, "--reviewer", "fixture-reviewer"])
     companies, reviews, _ = run_pipeline(args)
-    assert [item.review_id for item in reviews if item.status == "approved"] == ["REVIEW-COMP-0001"]
+    assert [item.review_id for item in reviews if item.status == "approved"] == [selected]
     assert sum(item.pipeline_stage == "write_planned" for item in companies) == 1
 
 
@@ -80,3 +83,28 @@ def test_invalid_cli_arguments_are_rejected(arguments):
 def test_invalid_employee_count_is_rejected():
     with pytest.raises(ValueError):
         score_icp(replace(synthetic_companies(1)[0], employee_count=-1))
+
+
+def test_approval_from_a_different_packet_is_rejected():
+    _, original, _ = run_pipeline(parse_args(["--sandbox", "--records", "1", "--seed", "0"]))
+    args = parse_args(["--sandbox", "--records", "1", "--seed", "1", "--approve", original[0].review_id, "--reviewer", "fixture-reviewer"])
+    with pytest.raises(ValueError, match="absent or failed"):
+        run_pipeline(args)
+
+
+def test_export_retains_the_review_identity_and_reviewer(tmp_path):
+    _, baseline, _ = run_pipeline(parse_args(["--sandbox", "--records", "1"]))
+    args = parse_args(["--sandbox", "--records", "1", "--approve", baseline[0].review_id, "--reviewer", "fixture-reviewer"])
+    companies, reviews, failures = run_pipeline(args)
+    path = tmp_path / "output.csv"
+    export_csv(path, companies, reviews, failures)
+    with path.open() as handle:
+        row = next(csv.DictReader(handle))
+    assert row["review_id"] == baseline[0].review_id
+    assert row["approved_by"] == "fixture-reviewer"
+
+
+def test_direct_rate_limit_simulation_can_fail(monkeypatch):
+    monkeypatch.setattr("agent.orchestrator.random.random", lambda: 0.1)
+    with pytest.raises(RuntimeError, match="simulated_rate_limit"):
+        enrich(synthetic_companies(1)[0], simulate_rate_limit=True)
