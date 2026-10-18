@@ -180,9 +180,10 @@ def score_icp(company: Company) -> tuple[str, float]:
 def enrich(company: Company, simulate_rate_limit: bool = False, *, rng: random.Random | None = None) -> Company:
     if simulate_rate_limit and (rng or random).random() < 0.15:
         raise RuntimeError("simulated_rate_limit")
+    segment, score = score_icp(company)
     company.enrichment_status = "complete"
     company.pipeline_stage = "enriched"
-    company.icp_segment, company.icp_score = score_icp(company)
+    company.icp_segment, company.icp_score = segment, score
     return company
 
 

@@ -116,3 +116,12 @@ def test_invalid_reviewer_does_not_mutate_an_existing_approval():
     with pytest.raises(ValueError, match="non-empty"):
         review(item, approved_by=" ")
     assert asdict(item) == before
+
+
+def test_failed_direct_enrichment_never_claims_completion():
+    company = replace(synthetic_companies(1)[0], employee_count=-1)
+    before = asdict(company)
+    with pytest.raises(ValueError):
+        enrich(company)
+    assert asdict(company) == before
+    assert company.enrichment_status == "pending"
