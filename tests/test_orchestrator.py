@@ -108,3 +108,11 @@ def test_direct_rate_limit_simulation_can_fail(monkeypatch):
     monkeypatch.setattr("agent.orchestrator.random.random", lambda: 0.1)
     with pytest.raises(RuntimeError, match="simulated_rate_limit"):
         enrich(synthetic_companies(1)[0], simulate_rate_limit=True)
+
+
+def test_invalid_reviewer_does_not_mutate_an_existing_approval():
+    item = review(build_review(synthetic_companies(1)[0]), approved_by="fixture-reviewer")
+    before = asdict(item)
+    with pytest.raises(ValueError, match="non-empty"):
+        review(item, approved_by=" ")
+    assert asdict(item) == before

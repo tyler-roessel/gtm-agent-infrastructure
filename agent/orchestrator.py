@@ -217,10 +217,10 @@ def build_review(company: Company) -> ReviewRecord:
 
 
 def review(record: ReviewRecord, *, approved_by: str | None = None) -> ReviewRecord:
-    record.write_plan = {}
-    record.approved_by = None
     if approved_by is not None and (not isinstance(approved_by, str) or not approved_by.strip()):
         raise ValueError("reviewer must be non-empty")
+    record.write_plan = {}
+    record.approved_by = None
     if approved_by:
         record.status = "approved"
         record.approved_by = approved_by.strip()
