@@ -4,6 +4,25 @@ This repo is a public reference version of a private GTM automation architecture
 
 It is not a product and it is not a turnkey integration. It is a reference system for how sales pipeline data, enrichment workflows, CRM tooling, and AI agents can fit together when the workflow is built in stages instead of wired directly into production.
 
+## Executable Scope
+
+The executable is an offline sandbox. It generates seeded synthetic companies, applies an illustrative deterministic ICP rubric, records review decisions, and builds local mapping plans. It performs no model inference, external enrichment, or CRM writes.
+
+- Identical facts produce identical scores; fixtures use a repeatable seed.
+- Fit scores are rubric outputs, not calibrated confidence or buying intent.
+- High scores never grant approval. A reviewer and selected review ID are required.
+- Failed enrichment never creates a review packet or write plan.
+- Local approval is an operator assertion rather than access control.
+
+Use Python 3.10+. Install pytest and run `python3 -m pytest -q`.
+
+```bash
+python3 agent/orchestrator.py --sandbox --records 10 --seed 0
+python3 agent/orchestrator.py --sandbox --records 10 --seed 0 --approve REVIEW-COMP-0001 --reviewer demo-reviewer
+```
+
+Persistent state, reviewer access control, model evaluation, connector execution, durable retries, and monitoring are outside this sample. The architecture narrative supplies design context rather than proof of production deployment.
+
 ## What This Demonstrates
 
 - How a messy GTM process was modeled as a five-stage operating workflow.
@@ -24,7 +43,7 @@ The workflow stabilized into five stages:
 4. Drafting, recommendation, and review: create the CRM-ready draft, recommended action, routing decision, and reviewer notes.
 5. CRM handoff and automation-ready execution: write approved records to the CRM, log outcomes, and sync downstream state.
 
-Full automation happened after the five-stage workflow stabilized. Automation is the maturity state of the five stages, not a sixth stage.
+The architecture treats automation as a later maturity state of the five stages. This public sandbox stops at local review and mapping plans.
 
 ## How The AI Was Taught
 
@@ -93,7 +112,7 @@ That means the system has to answer several practical questions before anything 
 - Which team owns the next step, and which platform needs the update?
 - What should become a CRM field, an activity note, a task, a Slack handoff, or a research queue item?
 
-The sandbox uses synthetic records, but the implementation pattern is the same: collect evidence, score fit, generate a bounded recommendation, require review where confidence is low, then route approved outputs to the correct downstream system.
+The sandbox illustrates scoring, review, and handoff planning with synthetic records. Every plan requires an explicit review decision regardless of score; external routing is unimplemented.
 
 ## What Was Preserved
 
