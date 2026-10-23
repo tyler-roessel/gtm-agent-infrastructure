@@ -12,14 +12,13 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import json
 import logging
 import random
 import re
 import sys
-import time
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
 from pathlib import Path
 
 
@@ -39,6 +38,7 @@ ICP_SEGMENTS = [
 ]
 
 SOURCES = ["directory", "referral", "job_signal", "manual", "partner", "content_signal"]
+FIXTURE_TIMESTAMP = "2026-01-01T00:00:00+00:00"
 INDUSTRIES = ["B2B SaaS", "FinTech", "Marketplace", "Enterprise SaaS", "Developer Tools", "Vertical SaaS"]
 FUNDING_STAGES = ["Pre-Seed", "Seed", "Series A", "Series B", "Series C", "Bootstrapped", "Growth"]
 COMPANY_NAMES = [
@@ -101,6 +101,7 @@ class ReviewRecord:
     status: str = "pending"
     reviewer_notes: str = ""
     write_plan: dict = field(default_factory=dict)
+    approved_by: str | None = None
 
 
 def normalize_domain(name: str) -> str:
@@ -108,24 +109,27 @@ def normalize_domain(name: str) -> str:
     return f"{slug}.test"
 
 
-def synthetic_companies(count: int) -> list[Company]:
-    now = datetime.now(timezone.utc).isoformat()
+def synthetic_companies(count: int, *, seed: int = 0) -> list[Company]:
+    if count < 0:
+        raise ValueError("record count cannot be negative")
+    rng = random.Random(seed)
+    now = FIXTURE_TIMESTAMP
     companies = []
     for idx in range(count):
         name = COMPANY_NAMES[idx % len(COMPANY_NAMES)]
-        stage = random.choice(FUNDING_STAGES)
-        funding_amount = None if stage == "Bootstrapped" else random.choice([750_000, 3_000_000, 8_000_000, 15_000_000, 40_000_000, 90_000_000])
+        stage = rng.choice(FUNDING_STAGES)
+        funding_amount = None if stage == "Bootstrapped" else rng.choice([750_000, 3_000_000, 8_000_000, 15_000_000, 40_000_000, 90_000_000])
         companies.append(
             Company(
                 company_id=f"COMP-{idx + 1:04d}",
                 name=name,
                 domain=normalize_domain(name),
-                source=random.choice(SOURCES),
-                industry=random.choice(INDUSTRIES),
-                employee_count=random.choice([8, 18, 35, 80, 150, 300, 700, 1200]),
+                source=rng.choice(SOURCES),
+                industry=rng.choice(INDUSTRIES),
+                employee_count=rng.choice([8, 18, 35, 80, 150, 300, 700, 1200]),
                 funding_stage=stage,
                 funding_amount=funding_amount,
-                tech_stack=random.choice(TECH_STACKS),
+                tech_stack=list(rng.choice(TECH_STACKS)),
                 discovered_at=now,
             )
         )
@@ -133,6 +137,11 @@ def synthetic_companies(count: int) -> list[Company]:
 
 
 def score_icp(company: Company) -> tuple[str, float]:
+    """Illustrative deterministic fit rubric; not a calibrated probability."""
+    if isinstance(company.employee_count, bool) or company.employee_count <= 0:
+        raise ValueError("employee count must be positive")
+    if company.funding_amount is not None and company.funding_amount < 0:
+        raise ValueError("funding amount cannot be negative")
     scores = {}
 
     founder = 0.0
@@ -164,17 +173,17 @@ def score_icp(company: Company) -> tuple[str, float]:
     scores["GTM Platform Builder"] = builder
 
     segment = max(scores, key=scores.get)
-    score = min(max(scores[segment] + random.uniform(-0.05, 0.12), 0.0), 0.99)
+    score = scores[segment]
     return segment, round(score, 2)
 
 
-def enrich(company: Company, simulate_rate_limit: bool = False) -> Company:
-    if simulate_rate_limit and random.random() < 0.15:
+def enrich(company: Company, simulate_rate_limit: bool = False, *, rng: random.Random | None = None) -> Company:
+    if simulate_rate_limit and (rng or random).random() < 0.15:
         raise RuntimeError("simulated_rate_limit")
-    time.sleep(0.01)
+    segment, score = score_icp(company)
     company.enrichment_status = "complete"
     company.pipeline_stage = "enriched"
-    company.icp_segment, company.icp_score = score_icp(company)
+    company.icp_segment, company.icp_score = segment, score
     return company
 
 
@@ -190,8 +199,15 @@ def build_review(company: Company) -> ReviewRecord:
         "prepare CRM company payload",
         "route to review queue",
     ]
+    facts = asdict(company)
+    facts = {key: facts[key] for key in (
+        "company_id", "name", "domain", "source", "industry", "employee_count",
+        "funding_stage", "funding_amount", "tech_stack", "discovered_at",
+    )}
+    packet = {"company": facts, "summary": summary, "actions": actions}
+    digest = hashlib.sha256(json.dumps(packet, sort_keys=True).encode()).hexdigest()[:16]
     return ReviewRecord(
-        review_id=f"REVIEW-{company.company_id}",
+        review_id=f"REVIEW-{company.company_id}-{digest}",
         company_id=company.company_id,
         company_name=company.name,
         icp_segment=company.icp_segment or "Unscored",
@@ -201,9 +217,15 @@ def build_review(company: Company) -> ReviewRecord:
     )
 
 
-def review(record: ReviewRecord, auto_approve: bool = False) -> ReviewRecord:
-    if auto_approve or record.icp_score >= 0.7:
+def review(record: ReviewRecord, *, approved_by: str | None = None) -> ReviewRecord:
+    if approved_by is not None and (not isinstance(approved_by, str) or not approved_by.strip()):
+        raise ValueError("reviewer must be non-empty")
+    record.write_plan = {}
+    record.approved_by = None
+    if approved_by:
         record.status = "approved"
+        record.approved_by = approved_by.strip()
+        record.reviewer_notes = "Explicit local review decision; mapping plan only."
         record.write_plan = {
             "crm_object": "company",
             "operation": "upsert",
@@ -212,7 +234,7 @@ def review(record: ReviewRecord, auto_approve: bool = False) -> ReviewRecord:
         }
     elif record.icp_score < 0.35:
         record.status = "rejected"
-        record.reviewer_notes = "Low ICP confidence. Hold for manual triage."
+        record.reviewer_notes = "Low illustrative fit score. Retain for manual triage."
     else:
         record.status = "pending"
         record.reviewer_notes = "Needs human review before CRM handoff."
@@ -220,7 +242,8 @@ def review(record: ReviewRecord, auto_approve: bool = False) -> ReviewRecord:
 
 
 def run_pipeline(args: argparse.Namespace) -> tuple[list[Company], list[ReviewRecord], list[dict]]:
-    companies = synthetic_companies(args.records)
+    companies = synthetic_companies(args.records, seed=args.seed)
+    rng = random.Random(args.seed)
     reviews: list[ReviewRecord] = []
     failures: list[dict] = []
 
@@ -242,9 +265,10 @@ def run_pipeline(args: argparse.Namespace) -> tuple[list[Company], list[ReviewRe
         try:
             if args.simulate_20pct_failure and idx % 5 == 0:
                 raise RuntimeError("simulated_validation_failure")
-            enrich(company, simulate_rate_limit=args.simulate_rate_limit)
+            enrich(company, simulate_rate_limit=args.simulate_rate_limit, rng=rng)
         except Exception as exc:
             company.enrichment_status = "failed"
+            company.pipeline_stage = "enrichment_failed"
             company.error = str(exc)
             failures.append({"company_id": company.company_id, "error": str(exc), "stage": "enrichment"})
 
@@ -252,7 +276,13 @@ def run_pipeline(args: argparse.Namespace) -> tuple[list[Company], list[ReviewRe
     for company in unique:
         if company.enrichment_status == "complete":
             company.pipeline_stage = "reviewing"
-            reviews.append(review(build_review(company), auto_approve=args.auto_approve))
+            item = build_review(company)
+            reviewer = args.reviewer if item.review_id in args.approve else None
+            reviews.append(review(item, approved_by=reviewer))
+
+    unknown = set(args.approve) - {item.review_id for item in reviews}
+    if unknown:
+        raise ValueError("approval IDs are absent or failed enrichment: " + ", ".join(sorted(unknown)))
 
     log.info("Stage 5: CRM handoff and automation-ready execution")
     approved = [item for item in reviews if item.status == "approved"]
@@ -278,6 +308,8 @@ def export_csv(path: Path, companies: list[Company], reviews: list[ReviewRecord]
                 "icp_score",
                 "pipeline_stage",
                 "review_status",
+                "review_id",
+                "approved_by",
             ],
         )
         writer.writeheader()
@@ -293,6 +325,8 @@ def export_csv(path: Path, companies: list[Company], reviews: list[ReviewRecord]
                     "icp_score": company.icp_score,
                     "pipeline_stage": company.pipeline_stage,
                     "review_status": review_record.status if review_record else "none",
+                    "review_id": review_record.review_id if review_record else "",
+                    "approved_by": review_record.approved_by if review_record else "",
                 }
             )
 
@@ -307,11 +341,13 @@ def display(companies: list[Company], reviews: list[ReviewRecord], failures: lis
         records = [item for item in companies if item.icp_segment == segment]
         if records:
             avg = sum(item.icp_score for item in records) / len(records)
-            print(f"  {segment}: {len(records)} records ({avg:.2f} avg match)")
+            print(f"  {segment}: {len(records)} records ({avg:.2f} avg rubric score)")
 
     print("\n--- REVIEW QUEUE ---")
     for status in ["pending", "approved", "rejected"]:
         print(f"  {status}: {sum(1 for item in reviews if item.status == status)}")
+    for item in reviews:
+        print(f"  {item.review_id}: {item.status}; reviewer={item.approved_by or 'none'}")
 
     print("\n--- FAILURE LOG ---")
     print(f"  failures preserved: {len(failures)}")
@@ -322,15 +358,22 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="GTM infrastructure sandbox orchestrator")
     parser.add_argument("--sandbox", action="store_true", help="Run with synthetic data only")
     parser.add_argument("--records", type=int, default=25, help="Number of synthetic records")
-    parser.add_argument("--auto-approve", action="store_true", help="Approve all generated review records")
+    parser.add_argument("--seed", type=int, default=0, help="Reproducible synthetic fixture seed")
+    parser.add_argument("--approve", action="append", default=[], metavar="REVIEW_ID", help="Explicitly approve a synthetic review ID")
+    parser.add_argument("--reviewer", help="Name recorded for explicit local approval decisions")
     parser.add_argument("--simulate-rate-limit", action="store_true", help="Simulate intermittent rate limit errors")
     parser.add_argument("--simulate-20pct-failure", action="store_true", help="Simulate one failure per five records")
     parser.add_argument("--export", type=Path, help="Export synthetic pipeline output to CSV")
-    return parser.parse_args(argv)
+    args = parser.parse_args(argv)
+    if args.records < 0:
+        parser.error("--records cannot be negative")
+    if args.approve and (not args.reviewer or not args.reviewer.strip()):
+        parser.error("--approve requires a non-empty --reviewer")
+    return args
 
 
 def main(argv: list[str] | None = None) -> int:
-    args = parse_args(argv or sys.argv[1:])
+    args = parse_args(sys.argv[1:] if argv is None else argv)
     if not args.sandbox:
         log.error("Only --sandbox mode is implemented in the public showcase.")
         return 2

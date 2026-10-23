@@ -12,6 +12,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+      - run: python -m pip install pytest
+      - run: python -m pytest -q
       - run: python agent/orchestrator.py --sandbox --records 10
       - run: python agent/orchestrator.py --sandbox --records 10 --simulate-20pct-failure --export examples/smoke-output.csv
 

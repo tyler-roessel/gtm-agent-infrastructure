@@ -14,7 +14,7 @@ Optional checks:
 ```bash
 python3 orchestrator.py --sandbox --records 50 --simulate-rate-limit
 python3 orchestrator.py --sandbox --records 50 --simulate-20pct-failure
-python3 orchestrator.py --sandbox --records 25 --auto-approve
+python3 orchestrator.py --sandbox --records 25 --seed 0 --approve REVIEW-COMP-0001-e422c86df7597581 --reviewer demo-reviewer
 python3 orchestrator.py --sandbox --records 25 --export ../examples/sandbox-output.csv
 ```
 
@@ -29,7 +29,8 @@ Sandbox mode does not call Airtable, Attio, Salesforce, HubSpot, n8n, Firecrawl,
 ## What To Inspect
 
 - Whether records are created with synthetic `.test` domains.
-- Whether low-confidence records are rejected or held for review.
+- Whether low rubric scores are rejected or held for review.
+- Whether high scores remain unapproved without an explicit reviewer and selected ID.
 - Whether approved records generate CRM write plans rather than blind writes.
 - Whether failed records are preserved with error context.
 
